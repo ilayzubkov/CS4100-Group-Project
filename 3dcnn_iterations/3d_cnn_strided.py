@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks 1->8->16->32->64 with strided Conv3d(stride=2) replacing MaxPool, BatchNorm3d + Dropout3d(0.2).
 # Strided conv lets gradients flow through all spatial positions; MaxPool only passes through the max.
 
