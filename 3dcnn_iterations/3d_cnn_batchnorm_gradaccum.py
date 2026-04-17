@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 3 conv blocks 1->8->16->32 with BatchNorm3d + Dropout3d(0.1) after each block, ~3.56M params.
 # Manual SGD with gradient accumulation (4 steps, effective batch=16) and LR decay.
 
