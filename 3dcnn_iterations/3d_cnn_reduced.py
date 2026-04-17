@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks 1->4->8->16->32 with strided Conv3d(stride=2), BatchNorm3d + Dropout3d(0.4), ~241K params.
 # Halved filter counts reduce overfitting on 267 training examples; checkpoints on best val accuracy.
 
