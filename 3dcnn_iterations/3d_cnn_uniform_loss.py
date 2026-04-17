@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks 1->4->8->16->32 with strided Conv3d(stride=2), BatchNorm3d + Dropout3d(0.4), ~241K params.
 # Equal loss weights (ones): WRS already balances class frequency; adding sqrt weights on top over-pushes rare classes.
 
