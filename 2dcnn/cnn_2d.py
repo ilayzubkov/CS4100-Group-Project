@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 """
 cnn_2d.py
 2D CNN on Axial Slices — Variant 2
