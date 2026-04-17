@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 """
 preprocess_oasis2.py
 OASIS-2 Preprocessing Pipeline — CS4100 Group Project
