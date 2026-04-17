@@ -19,7 +19,7 @@ CS4100-Group-Project/
 │   └── results/
 ├── 2dcnn/
 │   ├── cnn_2d.py
-│   └── results/
+│   └── variant2_2dcnn_<timestamp>.csv  # recorded run
 ├── 3dcnn_iterations/
 │   ├── [13 intermediate model files]
 │   └── results/
@@ -147,7 +147,7 @@ Upload `data/splits.json` and your skull-stripped volumes to Google Drive and up
 
 #### 3D CNN Iteration History
 
-The `3dcnn_iterations/` folder contains the 13 intermediate architectures explored between the baseline and the final best model — each change in optimizer, regularization, sampling strategy, or augmentation is its own file. These can each be run with the same setup as Variant 1 and are included for full reproducibility of the development process.
+The `3dcnn_iterations/` folder contains the 13 intermediate architectures explored between the baseline and the final best model — each change in optimizer, regularization, sampling strategy, or augmentation is its own file. The first nine can be run with the same setup as Variant 1 (local paths). The last four (`3d_cnn_macro.py`, `3d_cnn_uniform_loss.py`, `3d_cnn_lr_schedule.py`, `3d_cnn_extended_aug.py`) were developed on Colab and need the same path edits as Variant 3 to run locally. All iteration files are included for full reproducibility of the development process.
 
 ---
 
