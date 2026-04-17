@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks 1->8->16->32->64 with strided Conv3d(stride=2), BatchNorm3d + Dropout3d(0.2).
 # Adam (lr=1e-4), gradient clipping (norm=1.0), sqrt inverse-frequency weights, flip augmentation.
 
