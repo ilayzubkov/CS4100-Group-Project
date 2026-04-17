@@ -29,7 +29,6 @@ CS4100-Group-Project/
 ├── 3dcnn_with_demo/
 │   ├── cs41003dcnnwithdemo.py
 │   └── results/
-├── explore_alzh_dataset.py
 └── figures/
 ```
 
