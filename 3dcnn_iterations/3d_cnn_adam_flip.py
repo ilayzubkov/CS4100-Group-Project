@@ -1,38 +1,5 @@
-"""
-cnn_3d_v3c.py
-3D CNN — Variant 3c: Deeper Architecture + Gradient Accumulation + Stronger Dropout
-CS4100 Group Project — Ilay Zubkov, Jacob Shechter, Francesca Caldarella
-
-Classifies OASIS-2 MRI volumes into three CDR stages:
-  0 — Non-demented  |  1 — Very mild  |  2 — Mild-to-moderate
-
-Combines the best of V3a and V3b:
-  1 — 4th conv block         : (32->64), halves spatial dims (12->6).
-                               Reduces FC input from 55296 to 13824.
-  2 — Smaller FC             : Linear(13824, 64) vs V3b's Linear(55296, 64).
-                               ~885K params vs 3.5M — 4x reduction.
-  3 — Batch Normalization    : after each Conv3d, before ReLU.
-  4 — Dropout3d (p=0.2)     : stronger than V3b (p=0.1). Now viable because
-                               gradient accumulation stabilises the update signal.
-  5 — Gradient accumulation  : 4 steps, effective batch size = 16.
-  6 — Learning rate decay    : halved every 15 epochs.
-
-Spatial progression:
-  Input        (1,  96, 96, 96)
-  After block1 (8,  48, 48, 48)
-  After block2 (16, 24, 24, 24)
-  After block3 (32, 12, 12, 12)
-  After block4 (64,  6,  6,  6)
-  Flatten      (13824,)
-  FC hidden    (64,)
-  Output       (3,)
-
-Sections:
-  1 — Dataset   : loads preprocessed .npy volumes and labels
-  2 — Model     : 4-block CNN with BatchNorm, Dropout, smaller FC
-  3 — Training  : gradient accumulation loop, evaluation
-  4 — Main      : hyperparameters, runs training, prints results
-"""
+# Same 3-block 1->8->16->32 architecture as baseline; adds Adam optimizer and left-right flip augmentation.
+# Changes from baseline: Adam (lr=1e-3, no decay), random horizontal flip p=0.5 on training volumes.
 
 import json
 from pathlib import Path
@@ -45,14 +12,14 @@ from torch.utils.data import Dataset, DataLoader
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# SECTION 1: DATASET
-
 class OASISDataset(Dataset):
 
-    def __init__(self, splits_file: str, split: str, data_dir: str = None):
+    def __init__(self, splits_file: str, split: str,
+                 data_dir: str = None, augment: bool = False):
         with open(splits_file) as f:
             self.records = json.load(f)[split]
         self.data_dir = Path(data_dir) if data_dir else None
+        self.augment  = augment
 
     def __len__(self):
         return len(self.records)
@@ -60,57 +27,52 @@ class OASISDataset(Dataset):
     def __getitem__(self, idx):
         record = self.records[idx]
         if self.data_dir:
-            path = self.data_dir / record["path"].replace("\\", "/").split("/")[-1]
+            path = self.data_dir / Path(record["path"]).name
         else:
             path = record["path"]
+
         volume = torch.tensor(np.load(path).astype(np.float32)).unsqueeze(0)
-        label  = torch.tensor(record["label"], dtype=torch.long)
+
+        # Alzheimer's pathology is bilateral, so a horizontally flipped brain is
+        # still a valid training example. Never applied to val or test.
+        if self.augment and torch.rand(1).item() < 0.5:
+            volume = torch.flip(volume, dims=[3])
+
+        label = torch.tensor(record["label"], dtype=torch.long)
         return volume.to(DEVICE), label.to(DEVICE)
 
 
-# SECTION 2: MODEL
+# Spatial progression:
+#   Input        (1,  96, 96, 96)
+#   After block1 (8,  48, 48, 48)
+#   After block2 (16, 24, 24, 24)
+#   After block3 (32, 12, 12, 12)
+#   Flatten      55296 -> FC(64) -> 3
 
-class CNN3D_V3c(nn.Module):
+class CNN3D(nn.Module):
 
-    def __init__(self, dropout_p: float = 0.2):
+    def __init__(self):
         super().__init__()
 
         self.block1 = nn.Sequential(
             nn.Conv3d(in_channels=1,  out_channels=8,  kernel_size=3, padding=1),
-            nn.BatchNorm3d(8),
             nn.ReLU(),
-            nn.MaxPool3d(kernel_size=2),
-            nn.Dropout3d(p=dropout_p)
+            nn.MaxPool3d(kernel_size=2)
         )
         self.block2 = nn.Sequential(
             nn.Conv3d(in_channels=8,  out_channels=16, kernel_size=3, padding=1),
-            nn.BatchNorm3d(16),
             nn.ReLU(),
-            nn.MaxPool3d(kernel_size=2),
-            nn.Dropout3d(p=dropout_p)
+            nn.MaxPool3d(kernel_size=2)
         )
         self.block3 = nn.Sequential(
             nn.Conv3d(in_channels=16, out_channels=32, kernel_size=3, padding=1),
-            nn.BatchNorm3d(32),
             nn.ReLU(),
-            nn.MaxPool3d(kernel_size=2),
-            nn.Dropout3d(p=dropout_p)
-        )
-        # 4th block: doubles filters to 64, halves spatial dims from 12 to 6.
-        # Reduces FC input from 55296 to 13824 — 4x fewer parameters in classifier.
-        self.block4 = nn.Sequential(
-            nn.Conv3d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.MaxPool3d(kernel_size=2),
-            nn.Dropout3d(p=dropout_p)
+            nn.MaxPool3d(kernel_size=2)
         )
 
-        # Flatten: (batch, 64, 6, 6, 6) -> (batch, 13824)
-        # FC:      (batch, 13824) -> (batch, 64) -> (batch, 3)
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64 * 6 * 6 * 6, 64),
+            nn.Linear(32 * 12 * 12 * 12, 64),
             nn.ReLU(),
             nn.Linear(64, 3)
         )
@@ -119,17 +81,16 @@ class CNN3D_V3c(nn.Module):
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
-        x = self.block4(x)
         x = self.classifier(x)
         return x   # raw logits, shape (batch, 3)
 
 
-# SECTION 3: TRAINING
-
 def categorical_cross_entropy(logits, targets, class_weights):
     """
-    Weighted softmax + categorical cross-entropy loss.
-    Identical to Variant 1 — see cnn_3d.py for full explanation.
+    Manual softmax cross-entropy with per-class loss scaling.
+
+    Logits are shifted by their row-wise max before exponentiation for numerical
+    stability. Each example's loss is scaled by its class weight.
     """
     logits = logits - logits.max(dim=1, keepdim=True).values
     exp    = torch.exp(logits)
@@ -143,11 +104,12 @@ def categorical_cross_entropy(logits, targets, class_weights):
 
 
 def accuracy(logits, targets):
-    predictions = logits.argmax(dim=1)
-    return (predictions == targets).float().mean().item()
+    """Overall fraction correct."""
+    return (logits.argmax(dim=1) == targets).float().mean().item()
 
 
 def per_class_accuracy(logits, targets, num_classes=3):
+    """Returns {class: (correct, total)} for each class."""
     predictions = logits.argmax(dim=1)
     results = {}
     for c in range(num_classes):
@@ -158,22 +120,17 @@ def per_class_accuracy(logits, targets, num_classes=3):
     return results
 
 
-def train_one_epoch(model, loader, learning_rate, class_weights, accumulate_steps):
+def train_one_epoch(model, loader, optimizer, class_weights):
+    """One pass over the training set. Returns (mean_loss, mean_acc)."""
     model.train()
     total_loss, total_acc = 0.0, 0.0
 
-    for i, (volumes, labels) in enumerate(loader):
+    for volumes, labels in loader:
+        optimizer.zero_grad()
         logits = model(volumes)
         loss   = categorical_cross_entropy(logits, labels, class_weights)
-
-        (loss / accumulate_steps).backward()
-
-        if (i + 1) % accumulate_steps == 0 or (i + 1) == len(loader):
-            with torch.no_grad():
-                for param in model.parameters():
-                    if param.grad is not None:
-                        param.data -= learning_rate * param.grad
-            model.zero_grad()
+        loss.backward()
+        optimizer.step()
 
         total_loss += loss.item()
         total_acc  += accuracy(logits, labels)
@@ -183,6 +140,7 @@ def train_one_epoch(model, loader, learning_rate, class_weights, accumulate_step
 
 
 def evaluate(model, loader, class_weights):
+    """Evaluate on val/test split without updating weights."""
     model.eval()
     total_loss = 0.0
     all_logits, all_labels = [], []
@@ -202,36 +160,38 @@ def evaluate(model, loader, class_weights):
     return total_loss / len(loader), acc, per_class
 
 
-# SECTION 4: MAIN
-
 def main():
     import csv
     from datetime import datetime
 
-    splits_file      = "data/splits.json"
-    learning_rate    = 1e-3
-    batch_size       = 4
-    epochs           = 50
-    dropout_p        = 0.2
-    accumulate_steps = 4   # effective batch size = 4 * 4 = 16
+    splits_file   = "data/splits.json"
+    learning_rate = 1e-3
+    batch_size    = 4
+    epochs        = 50
 
-    decay_every  = 15
-    decay_factor = 0.5
-
+    # For Colab: results_dir = Path("/content/drive/MyDrive/results")
     results_dir  = Path("results")
     results_dir.mkdir(exist_ok=True)
     timestamp    = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_file = results_dir / f"variant3c_{timestamp}.csv"
+    results_file = results_dir / f"adam_flip_{timestamp}.csv"
 
+    # On Colab: data_dir = "/content/drive/MyDrive/CS4100/processed"
     data_dir = None
 
-    train_loader = DataLoader(OASISDataset(splits_file, "train", data_dir),
-                              batch_size=batch_size, shuffle=True)
-    val_loader   = DataLoader(OASISDataset(splits_file, "val",   data_dir),
-                              batch_size=batch_size, shuffle=False)
-    test_loader  = DataLoader(OASISDataset(splits_file, "test",  data_dir),
-                              batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(
+        OASISDataset(splits_file, "train", data_dir, augment=True),
+        batch_size=batch_size, shuffle=True
+    )
+    val_loader = DataLoader(
+        OASISDataset(splits_file, "val",  data_dir, augment=False),
+        batch_size=batch_size, shuffle=False
+    )
+    test_loader = DataLoader(
+        OASISDataset(splits_file, "test", data_dir, augment=False),
+        batch_size=batch_size, shuffle=False
+    )
 
+    # Class weights: total / (num_classes * count_per_class)
     train_labels  = [r["label"] for r in train_loader.dataset.records]
     class_counts  = [train_labels.count(c) for c in range(3)]
     total         = len(train_labels)
@@ -240,35 +200,27 @@ def main():
     ).to(DEVICE)
     print(f"Class weights: {class_weights.tolist()}")
 
-    model = CNN3D_V3c(dropout_p=dropout_p).to(DEVICE)
+    model     = CNN3D().to(DEVICE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
     print(f"Device: {DEVICE}")
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-    print(f"Effective batch size: {batch_size * accumulate_steps}")
-    print(f"Training on {len(train_loader.dataset)} sessions, "
+    print(f"Training on {len(train_loader.dataset)} sessions (augmented), "
           f"validating on {len(val_loader.dataset)}\n")
 
     epoch_rows = []
-    current_lr = learning_rate
 
     for epoch in range(1, epochs + 1):
-
-        if epoch > 1 and (epoch - 1) % decay_every == 0:
-            current_lr *= decay_factor
-            print(f"  [lr decay] learning rate -> {current_lr:.2e}")
-
-        train_loss, train_acc       = train_one_epoch(model, train_loader, current_lr, class_weights, accumulate_steps)
+        train_loss, train_acc       = train_one_epoch(model, train_loader, optimizer, class_weights)
         val_loss,   val_acc, val_pc = evaluate(model, val_loader, class_weights)
 
-        pc_str = "  ".join(
-            f"c{c}: {val_pc[c][0]}/{val_pc[c][1]}" for c in sorted(val_pc)
-        )
+        pc_str = "  ".join(f"c{c}: {val_pc[c][0]}/{val_pc[c][1]}" for c in sorted(val_pc))
         print(f"Epoch {epoch:>2}/{epochs} | "
               f"train loss {train_loss:.4f}  acc {train_acc:.3f} | "
               f"val loss {val_loss:.4f}  acc {val_acc:.3f} | {pc_str}")
 
         epoch_rows.append({
-            "epoch": epoch, "lr": current_lr,
-            "train_loss": train_loss, "train_acc": train_acc,
+            "epoch": epoch, "train_loss": train_loss, "train_acc": train_acc,
             "val_loss": val_loss, "val_acc": val_acc,
             "val_c0": f"{val_pc[0][0]}/{val_pc[0][1]}",
             "val_c1": f"{val_pc[1][0]}/{val_pc[1][1]}",
@@ -281,7 +233,7 @@ def main():
     print(f"  test loss {test_loss:.4f}  acc {test_acc:.3f} | {pc_str}")
 
     fieldnames = [
-        "epoch", "lr", "train_loss", "train_acc",
+        "epoch", "train_loss", "train_acc",
         "val_loss", "val_acc", "val_c0", "val_c1", "val_c2",
         "test_loss", "test_acc", "test_c0", "test_c1", "test_c2"
     ]
@@ -293,8 +245,7 @@ def main():
         writer.writeheader()
         writer.writerows(epoch_rows)
         writer.writerow({
-            "epoch": "TEST", "lr": "",
-            "train_loss": "", "train_acc": "",
+            "epoch": "TEST", "train_loss": "", "train_acc": "",
             "val_loss": "", "val_acc": "", "val_c0": "", "val_c1": "", "val_c2": "",
             "test_loss": test_loss, "test_acc": test_acc,
             "test_c0": f"{test_pc[0][0]}/{test_pc[0][1]}",
