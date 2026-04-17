@@ -45,7 +45,9 @@ from antspynet.utilities import brain_extraction
 # CONFIGURATION
 # Override these paths when running on Colab or Kaggle
 
-BASE        = Path(__file__).parent
+# This file lives in data/, so .parent.parent resolves to the project root
+# where the raw OASIS-2 archives are extracted.
+BASE        = Path(__file__).parent.parent
 PART1       = BASE / "OAS2_RAW_PART1"
 PART2       = BASE / "OAS2_RAW_PART2"
 DEMO_FILE   = BASE / "oasis_longitudinal_demographics-8d83e569fa2e2d30.xlsx"
