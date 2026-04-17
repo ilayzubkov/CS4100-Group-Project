@@ -29,10 +29,11 @@ CS4100-Group-Project/
 ├── 3dcnn_with_demo/
 │   ├── cs41003dcnnwithdemo.py
 │   └── results/
+├── explore_alzh_dataset.py
 └── figures/
 ```
 
-> `data/processed/` (the preprocessed `.npy` volumes, ~1.4 GB) is gitignored. You will need to run the preprocessing script before training any model.
+> `data/processed/` (the preprocessed `.npy` volumes, ~1.4 GB) is gitignored. You will need to run the preprocessing script before training any model. The committed CSVs in each variant's `results/` folder are the recorded runs that produced our reported numbers; fresh local runs will append new CSVs alongside them (Variants 1 and 2 write to `./results/` in the project root unless their `results_dir` is edited to point into their own folder).
 
 ---
 
@@ -60,7 +61,7 @@ For GPU support, install the CUDA build of PyTorch from [pytorch.org](https://py
 1. Download the OASIS-2 dataset from [oasis-brains.org](https://www.oasis-brains.org/). You will need:
    - `OAS2_RAW_PART1.tar.gz`
    - `OAS2_RAW_PART2.tar.gz`
-   - `oasis_longitudinal_demographics.xlsx`
+   - The demographics spreadsheet, distributed as `oasis_longitudinal_demographics-8d83e569fa2e2d30.xlsx`. The preprocessing scripts look for this exact filename — if OASIS has updated the hash, either rename your copy or update `DEMO_FILE` at the top of the preprocessing scripts.
 
 2. Extract both archives into the project root:
 
@@ -68,7 +69,7 @@ For GPU support, install the CUDA build of PyTorch from [pytorch.org](https://py
 CS4100-Group-Project/
 ├── OAS2_RAW_PART1/
 ├── OAS2_RAW_PART2/
-└── oasis_longitudinal_demographics-<hash>.xlsx
+└── oasis_longitudinal_demographics-8d83e569fa2e2d30.xlsx
 ```
 
 ---
@@ -79,6 +80,8 @@ CS4100-Group-Project/
 
 Run this once before any model. It averages repeated MRI acquisitions per session, resamples each volume to 96×96×96, applies z-score normalization, and produces a subject-level 70/15/15 train/val/test split.
 
+Run from the project root:
+
 ```bash
 python data/preprocess_oasis2_first.py
 ```
@@ -88,7 +91,7 @@ This writes 373 `.npy` files to `data/processed/` and a split manifest to `data/
 For the best 3D CNN and multimodal variant, we used skull-stripped volumes. After running the standard pipeline above:
 
 ```bash
-pip install antspynet
+pip install antspyx antspynet
 python data/preprocess_oasis2_stripped.py
 ```
 
@@ -118,14 +121,15 @@ python 2dcnn/cnn_2d.py
 
 This is the best-performing standalone 3D model. It uses a 4-block architecture with strided convolutions, batch normalization, dropout, weighted random sampling to address class imbalance, and macro accuracy checkpointing.
 
-This model was trained on Google Colab. To run locally, update the two path variables at the top of `main()` in `3dcnn_best/3d_cnn_best.py`:
+This model was trained on Google Colab. To run locally, update the three path variables at the top of `main()` in `3dcnn_best/3d_cnn_best.py`:
 
 ```python
 splits_file = "data/splits.json"
 data_dir    = "data/processed_stripped/"
+results_dir = Path("3dcnn_best/results")
 ```
 
-Then run:
+Then run from the project root:
 
 ```bash
 python 3dcnn_best/3d_cnn_best.py
