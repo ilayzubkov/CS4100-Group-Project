@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # Same 3-block 1->8->16->32 architecture as baseline; adds Adam optimizer and left-right flip augmentation.
 # Changes from baseline: Adam (lr=1e-3, no decay), random horizontal flip p=0.5 on training volumes.
 
