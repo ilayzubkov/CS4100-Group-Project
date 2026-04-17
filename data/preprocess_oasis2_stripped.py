@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 """
 preprocess_oasis2_stripped.py
 OASIS-2 Preprocessing Pipeline with Skull Stripping
