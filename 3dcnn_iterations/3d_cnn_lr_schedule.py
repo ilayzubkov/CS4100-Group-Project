@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks 1->4->8->16->32 with strided Conv3d(stride=2), BatchNorm3d + Dropout3d(0.4), ~241K params.
 # WRS + uniform loss + flip/noise/intensity augmentation + ReduceLROnPlateau(factor=0.5, patience=15) on val macro accuracy.
 
