@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks 1->8->16->32->64 with BatchNorm3d + Dropout3d(0.2), ~885K params.
 # Adam optimizer (lr=1e-3), left-right flip augmentation; no gradient accumulation or LR decay.
 
