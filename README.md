@@ -29,8 +29,9 @@ CS4100-Group-Project/
 ├── 3dcnn_with_demo/
 │   ├── cs41003dcnnwithdemo.py
 │   └── results/
-├── explore_alzh_dataset.py
 └── figures/
+    ├── iteration_test_accuracy.png
+    └── verify_slicing.png
 ```
 
 > `data/processed/` (the preprocessed `.npy` volumes, ~1.4 GB) is gitignored. You will need to run the preprocessing script before training any model. The committed CSVs in each variant's `results/` folder are the recorded runs that produced our reported numbers; fresh local runs will append new CSVs alongside them (Variants 1 and 2 write to `./results/` in the project root unless their `results_dir` is edited to point into their own folder).
