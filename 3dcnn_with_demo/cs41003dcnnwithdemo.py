@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # -*- coding: utf-8 -*-
 """CS41003DCNNWithDemo.ipynb
 
