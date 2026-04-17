@@ -1,3 +1,5 @@
+# Generative AI was used in the implementation and debugging of this code.
+
 # 4 conv blocks: Conv3d -> ReLU -> MaxPool3d(2), channels 1->8->16->32->64, ~77K params.
 # Manual SGD with inverse-frequency loss weights; LR halved every 15 epochs.
 
